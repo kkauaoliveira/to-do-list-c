@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <termios.h>
 
 #define MAX_TAREFAS 100
 #define TAMANHO_DESCRICAO 100
@@ -8,10 +10,27 @@
 typedef struct {
     char descricao[TAMANHO_DESCRICAO];
     int status; // 0: A Fazer, 1: Fazendo, 2: Feito
+    int prioridade; // 0: Emergente, 1: Urgente, 2: Importante
 } Tarefa;
 
 Tarefa tarefas[MAX_TAREFAS];
 int quantidade_tarefas = 0;
+int aba_selecionada = 0; // 0: A Fazer, 1: Fazendo, 2: Feito
+int tarefa_selecionada = 0;
+
+void desativarBufferDeEntrada() {
+    struct termios t;
+    tcgetattr(STDIN_FILENO, &t);
+    t.c_lflag &= ~(ICANON | ECHO);  // Desativa entrada canônica e eco
+    tcsetattr(STDIN_FILENO, TCSANOW, &t);
+}
+
+void ativarBufferDeEntrada() {
+    struct termios t;
+    tcgetattr(STDIN_FILENO, &t);
+    t.c_lflag |= ICANON | ECHO;  // Ativa entrada canônica e eco
+    tcsetattr(STDIN_FILENO, TCSANOW, &t);
+}
 
 void limpar_tela() {
     #ifdef _WIN32
@@ -27,19 +46,19 @@ void mostrar_tarefas() {
     printf("A Fazer:\n");
     for (int i = 0; i < quantidade_tarefas; i++) {
         if (tarefas[i].status == 0) {
-            printf("%d: %s\n", i + 1, tarefas[i].descricao);
+            printf("%d: %s [Prioridade: %d]\n", i + 1, tarefas[i].descricao, tarefas[i].prioridade);
         }
     }
     printf("\nFazendo:\n");
     for (int i = 0; i < quantidade_tarefas; i++) {
         if (tarefas[i].status == 1) {
-            printf("%d: %s\n", i + 1, tarefas[i].descricao);
+            printf("%d: %s [Prioridade: %d]\n", i + 1, tarefas[i].descricao, tarefas[i].prioridade);
         }
     }
     printf("\nFeito:\n");
     for (int i = 0; i < quantidade_tarefas; i++) {
         if (tarefas[i].status == 2) {
-            printf("%d: %s\n", i + 1, tarefas[i].descricao);
+            printf("%d: %s [Prioridade: %d]\n", i + 1, tarefas[i].descricao, tarefas[i].prioridade);
         }
     }
     printf("\n");
@@ -52,12 +71,18 @@ void adicionar_tarefa() {
     }
 
     char descricao[TAMANHO_DESCRICAO];
+    int prioridade;
+
     printf("Digite a descrição da tarefa: ");
     getchar(); // Limpa o buffer do teclado
     fgets(descricao, TAMANHO_DESCRICAO, stdin);
     descricao[strcspn(descricao, "\n")] = 0; // Remove a nova linha
 
-    tarefas[quantidade_tarefas].status = 0; // A Fazer
+    printf("Digite a prioridade (0: Emergente, 1: Urgente, 2: Importante): ");
+    scanf("%d", &prioridade);
+
+    tarefas[quantidade_tarefas].status = aba_selecionada;
+    tarefas[quantidade_tarefas].prioridade = prioridade;
     strcpy(tarefas[quantidade_tarefas].descricao, descricao);
     quantidade_tarefas++;
 
@@ -75,12 +100,18 @@ void editar_tarefa() {
     }
 
     char descricao[TAMANHO_DESCRICAO];
+    int prioridade;
+
     printf("Digite a nova descrição da tarefa: ");
     getchar(); // Limpa o buffer do teclado
     fgets(descricao, TAMANHO_DESCRICAO, stdin);
     descricao[strcspn(descricao, "\n")] = 0; // Remove a nova linha
 
+    printf("Digite a nova prioridade (0: Emergente, 1: Urgente, 2: Importante): ");
+    scanf("%d", &prioridade);
+
     strcpy(tarefas[numero_tarefa - 1].descricao, descricao);
+    tarefas[numero_tarefa - 1].prioridade = prioridade;
     printf("Tarefa editada com sucesso!\n");
 }
 
@@ -124,49 +155,49 @@ void excluir_tarefa() {
     printf("Tarefa excluída com sucesso!\n");
 }
 
+void mostrar_menu() {
+    limpar_tela();
+    printf("\n--- Menu ---\n");
+    printf("Use as setas para navegar e Enter para selecionar.\n");
+    printf("A Fazer | Fazendo | Feito\n");
+    printf("+ Adicionar Tarefa\n");
+    mostrar_tarefas();
+}
+
 int main() {
-    int opcao;
+    int teclaPressionada;
+    char k = 0;
 
+    desativarBufferDeEntrada();
+    
     while (1) {
-        limpar_tela();
-        printf("\n--- Menu ---\n");
-        printf("1. Visualizar tarefas\n");
-        printf("2. Adicionar tarefa\n");
-        printf("3. Editar tarefa\n");
-        printf("4. Mudar status da tarefa\n");
-        printf("5. Excluir tarefa\n");
-        printf("6. Sair\n");
-        printf("Escolha uma opção: ");
-        scanf("%d", &opcao);
+        mostrar_menu();
+        teclaPressionada = getchar();  // Lê o caractere
 
-        switch (opcao) {
-            case 1:
-                mostrar_tarefas();
-                break;
-            case 2:
+        if (teclaPressionada == '\e') {  // Se a tecla for uma sequência de escape
+            getchar();  // Ignora o caractere '['
+            
+            k = getchar();
+            if (k == 'A') {  // Seta para cima
+                if (tarefa_selecionada > 0) tarefa_selecionada--;
+            } else if (k == 'B') {  // Seta para baixo
+                if (tarefa_selecionada < quantidade_tarefas - 1) tarefa_selecionada++;
+            } else if (k == 'C') {  // Seta para a direita
+                if (aba_selecionada < 2) aba_selecionada++;
+            } else if (k == 'D') {  // Seta para a esquerda
+                if (aba_selecionada > 0) aba_selecionada--;
+            }
+        } 
+        else if (teclaPressionada == 10) {  // Enter
+            if (tarefa_selecionada == quantidade_tarefas) {
                 adicionar_tarefa();
-                break;
-            case 3:
-                editar_tarefa();
-                break;
-            case 4:
-                mudar_status();
-                break;
-            case 5:
-                excluir_tarefa();
-                break;
-            case 6:
-                printf("Saindo...\n");
-                exit(0);
-            default:
-                printf("Opção inválida! Tente novamente.\n");
+            } else {
+                // Aqui você pode adicionar a lógica para editar ou mudar o status da tarefa selecionada
+                printf("Tarefa selecionada: %d\n", tarefa_selecionada + 1);
+            }
         }
-
-        // Pausa para o usuário visualizar a mensagem antes de limpar a tela
-        printf("\nPressione Enter para continuar...");
-        getchar(); // Limpa o buffer do teclado
-        getchar(); // Aguarda o Enter
     }
-
+    
+    ativarBufferDeEntrada();
     return 0;
 }
