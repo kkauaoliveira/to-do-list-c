@@ -112,7 +112,7 @@ int get_sorted_indices(int tab, int indices[]) {
             indices[count++] = i;
         }
     }
-    // Ordenação simples (bubble sort)
+    // Ordenação simples (bubble sort - ap1)
     for (int i = 0; i < count - 1; i++) {
         for (int j = i + 1; j < count; j++) {
             if (tarefas[indices[i]].prioridade > tarefas[indices[j]].prioridade) {
