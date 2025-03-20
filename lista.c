@@ -27,7 +27,7 @@ struct termios config_original;
 
 // ================= Persistência (Salvar/Carregar) =================
 
-// Salva as tarefas em um arquivo "tarefas.txt"
+// Salva as tarefas em um arquivo "tarefas.txt"       //PRIORIDADE//STATUS//DESCRICAO
 void salvar_tarefas() {
     FILE *fp = fopen("tarefas.txt", "w");
     if (!fp) {
